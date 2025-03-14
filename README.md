@@ -13,9 +13,9 @@ the script tests the engine's result at each depth stored for this entry and dis
 **Stockfish** must be installed and accessible from your PATH (for the **compare_perft** script).
 
 Your engine must recognise the following UCI commands:
-- go perft DEPTH
-- position
-- uci
+- `go perft`
+- `position`
+- `uci`
 
 The engine must also output its perft results in a specific format for this script to work.
 The moves should be in the format `[start square][destination square][promotion]` and followed by the
