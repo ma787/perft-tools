@@ -1,5 +1,5 @@
 # perft-tools
-This repository provides to make debugging a chess engine's move generation less time-consuming.
+This repository provides tools to make debugging a chess engine's move generation less time-consuming.
 
 The **compare_perft** script allows you to compare your engine's move generation to a trusted engine (Stockfish)
 at any node. This is shown in a table which compares the number of nodes after making each legal move, making
@@ -11,6 +11,8 @@ the script tests the engine's result at each depth stored for this entry and dis
 
 ## Requirements
 **Stockfish** must be installed and accessible from your PATH (for the **compare_perft** script).
+
+The Python module **pexpect** must also be installed.
 
 Your engine must recognise the following UCI commands:
 - `go perft`
