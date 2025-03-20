@@ -11,7 +11,7 @@ import pexpect
 MOVE_REGEX = r"\A[a-h][1-8][a-h][1-8]([a-z]?)"
 
 FEN_REGEX = (
-    r"([pnbrqkPNBRQK1-8]+\/){7}[pnbrqkPNBRQK1-8]+\s[bw]\s([K]?[Q]?[k]?[q]?)"
+    r"([pnbrqkPNBRQK1-8]+\/){7}[pnbrqkPNBRQK1-8]+\s[bw]\s(([K]?[Q]?[k]?[q]?)|-)"
     r"\s(-|[a-h][36])\s([0-9]+)\s([0-9]+)"
 )
 
@@ -48,9 +48,7 @@ class EngineWrapper:
 
     def set_position(self, fen, moves=None):
         """Sets the current position that the engine should analyse."""
-        if fen == "startpos":
-            self.proc.sendline("position startpos")
-        elif not moves:
+        if not moves:
             self.proc.sendline(f"position fen {fen}")
         else:
             self.proc.sendline(f"position fen {fen} moves {" ".join(moves)}")
@@ -82,6 +80,8 @@ class EngineWrapper:
 
 
 class StockFishWrapper(EngineWrapper):
+    """Class providing stockfish-specific methods."""
+
     def __init__(self):
         super().__init__("stockfish")
         self.proc.expect("((.)*\r\n)*")
@@ -106,14 +106,17 @@ class ComparePerft:
         self.stockfish = StockFishWrapper()
         self.fen = START_POS
         self.prev_positions = []
-
-        self.stockfish.run(1)
-        self.moves = list(self.stockfish.results.keys())
+        self.moves = []
 
     def set_position(self, fen, moves=None):
         """Updates the current position."""
+        if fen == "startpos":
+            fen = START_POS
+
         self.stockfish.set_position(fen, moves)
         self.engine.set_position(fen, moves)
+        self.fen = fen
+        self.prev_positions = []
 
     def step_back(self):
         """Steps back up the game tree."""
@@ -219,8 +222,7 @@ def main():
     client = ComparePerft(sys.argv[1])
 
     while True:
-        user_in = input()
-        client.parse_command(user_in)
+        client.parse_command(input())
 
 
 if __name__ == "__main__":
