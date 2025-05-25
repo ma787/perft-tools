@@ -5,8 +5,9 @@ import shutil
 import sys
 import time
 
-
 import pexpect
+
+import constants as cs
 
 
 def parse_results_file(file_path):
@@ -57,7 +58,16 @@ def main():
 
     proc = pexpect.spawn(sys.argv[1])
     proc.setecho(False)
-    proc.expect("((.)*\r\n)*")
+    proc.sendline("uci")
+
+    proc.expect(cs.NAME_REGEX)
+    name_list = proc.after.decode("UTF-8").split("\r\n")[0].split(" ")
+    name = " ".join(name_list[2:])
+
+    if "stockfish" in name.lower():
+        reg = cs.STOCKFISH_REGEX
+    else:
+        reg = cs.PERFT_REGEX
 
     print(f"{"":12}{"FEN":72}", end="", flush=True)
     for i in range(1, depth + 1):
@@ -79,9 +89,7 @@ def main():
                 continue
 
             proc.sendline(f"go perft {i}")
-            proc.expect(
-                r"([a-h][1-8][a-h][1-8]([a-z]?) [0-9]+\r\n)+\r\n[0-9]+", timeout=None
-            )
+            proc.expect(reg, timeout=None)
 
             lines = list(filter(None, proc.after.decode("UTF-8").split("\r\n")))
             perft_result = int("".join(filter(str.isdigit, lines[-1])))

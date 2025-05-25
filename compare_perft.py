@@ -5,57 +5,24 @@ import shutil
 import sys
 
 
-import pexpect
+import engine_wrapper as ewr
+import constants as cs
 
 
-MOVE_REGEX = r"\A[a-h][1-8][a-h][1-8]([a-z]?)"
-
-FEN_REGEX = (
-    r"([pnbrqkPNBRQK1-8]+\/){7}[pnbrqkPNBRQK1-8]+\s[bw]\s(([K]?[Q]?[k]?[q]?)|-)"
-    r"\s(-|[a-h][36])\s([0-9]+)\s([0-9]+)"
-)
-
-STOCKFISH_REGEX = (
-    r"(info string(.)*\r\n)+([a-h][1-8][a-h][1-8]([a-z]?): [0-9]+\r\n)+"
-    r"\r\nNodes searched: [0-9]+"
-)
-PERFT_REGEX = r"([a-h][1-8][a-h][1-8]([a-z]?) [0-9]+\r\n)+\r\n[0-9]+"
-
-NAME_REGEX = r"id name (.)*\r\n"
-
-F_STRING = "{:8}{:>16}{:>16}{:>16}"
-
-START_POS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-
-
-class EngineWrapper:
-    """Class providing methods to run engine and store perft results."""
+class EnginePerftTester(ewr.EngineWrapper):
+    """Class providing methods to run perft tests."""
 
     def __init__(self, engine_exec):
+        super().__init__(engine_exec)
         self.results = {}
         self.total = 0
-        self.proc = pexpect.spawn(f"{engine_exec}")
-        self.proc.setecho(False)
-        self.proc.sendline("uci")
-        self.proc.expect(NAME_REGEX)
-        name_list = self.proc.after.decode("UTF-8").split("\r\n")[0].split(" ")
-        self.name = " ".join(name_list[2:])
 
     def clear(self):
         """Clears the currently stored perft results."""
         self.results = {}
         self.total = 0
 
-    def set_position(self, fen, moves=None):
-        """Sets the current position that the engine should analyse."""
-        if not moves:
-            self.proc.sendline(f"position fen {fen}")
-        else:
-            self.proc.sendline(f"position fen {fen} moves {" ".join(moves)}")
-
-        self.clear()
-
-    def run(self, depth, reg=PERFT_REGEX):
+    def run_perft(self, depth, reg=cs.PERFT_REGEX):
         """Runs the engine and stores the perft results."""
         self.clear()
         self.proc.sendline(f"go perft {depth}")
@@ -64,7 +31,7 @@ class EngineWrapper:
         lines = list(filter(None, str(self.proc.after.decode("UTF-8")).split("\r\n")))
 
         for l in lines:
-            move_match = re.match(MOVE_REGEX, l)
+            move_match = re.match(cs.MOVE_REGEX_LAN, l)
             if move_match is None:
                 continue
 
@@ -74,25 +41,21 @@ class EngineWrapper:
 
         self.total = int("".join(filter(str.isdigit, lines[-1])))
 
-    def close(self):
-        """Ends the engine process."""
-        self.proc.close()
 
-
-class StockFishWrapper(EngineWrapper):
+class StockFishPerftTester(EnginePerftTester):
     """Class providing stockfish-specific methods."""
 
     def __init__(self):
         super().__init__("stockfish")
         self.proc.expect("((.)*\r\n)*")
 
-    def run(self, depth, reg=STOCKFISH_REGEX):
-        super().run(depth, reg=reg)
+    def run_perft(self, depth, reg=cs.STOCKFISH_REGEX):
+        super().run_perft(depth, reg=reg)
 
     def get_position(self):
         """Gets the fen string of the engine's current position. Not part of UCI."""
         self.proc.sendline("d")
-        self.proc.expect(r"\r\n((.)*\r\n)*Fen: " + FEN_REGEX, timeout=2)
+        self.proc.expect(r"\r\n((.)*\r\n)*Fen: " + cs.FEN_REGEX, timeout=2)
 
         lines = str(self.proc.after.decode("UTF-8")).split("\r\n")
         return lines[-1].split(": ")[1]
@@ -102,16 +65,16 @@ class ComparePerft:
     """Class providing methods to compare the perft output of two engines."""
 
     def __init__(self, engine_exec):
-        self.engine = EngineWrapper(engine_exec)
-        self.stockfish = StockFishWrapper()
-        self.fen = START_POS
+        self.engine = EnginePerftTester(engine_exec)
+        self.stockfish = StockFishPerftTester()
+        self.fen = cs.START_POS
         self.prev_positions = []
         self.moves = []
 
     def set_position(self, fen, moves=None):
         """Updates the current position."""
         if fen == "startpos":
-            fen = START_POS
+            fen = cs.START_POS
 
         self.stockfish.set_position(fen, moves)
         self.engine.set_position(fen, moves)
@@ -146,26 +109,28 @@ class ComparePerft:
     def compare_perft(self, depth):
         """Prints the difference between the engines' perft results at a given depth."""
         print(
-            F_STRING.format("Move", self.engine.name, self.stockfish.name, "Difference")
+            cs.DIFF_FSTRING.format(
+                "Move", self.engine.name, self.stockfish.name, "Difference"
+            )
         )
 
-        self.stockfish.run(depth)
-        self.engine.run(depth)
+        self.stockfish.run_perft(depth)
+        self.engine.run_perft(depth)
 
         self.moves = list(self.stockfish.results.keys())
 
         for mstr, e1_res in self.engine.results.items():
             if mstr in self.stockfish.results:
                 e2_res = self.stockfish.results.pop(mstr)
-                print(F_STRING.format(mstr, e1_res, e2_res, e2_res - e1_res))
+                print(cs.DIFF_FSTRING.format(mstr, e1_res, e2_res, e2_res - e1_res))
             else:
-                print(F_STRING.format(mstr, e1_res, "-", -e1_res))
+                print(cs.DIFF_FSTRING.format(mstr, e1_res, "-", -e1_res))
 
         for mstr, e2_res in self.stockfish.results.items():
-            print(F_STRING.format(mstr, "-", e2_res, e2_res))
+            print(cs.DIFF_FSTRING.format(mstr, "-", e2_res, e2_res))
 
         print(
-            F_STRING.format(
+            cs.DIFF_FSTRING.format(
                 "Total",
                 self.engine.total,
                 self.stockfish.total,
@@ -200,7 +165,7 @@ class ComparePerft:
                 fen = " ".join(args[2:8])
                 moves = []
 
-                if not re.match(FEN_REGEX, fen):
+                if not re.match(cs.FEN_REGEX, fen):
                     return
 
                 if len(args) > 9 and args[8] == "moves":
