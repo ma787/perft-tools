@@ -5,14 +5,13 @@ import shutil
 import sys
 import time
 
-import pexpect
-
-import constants as cs
+import engine_wrapper as ewr
 
 
 def parse_results_file(file_path):
     """Extracts perft results from file."""
-    all_results = {}
+    stored_results = {}
+    max_depth = 0
 
     with open(file_path, "r", encoding="UTF-8") as f:
         lines = f.readlines()
@@ -23,13 +22,51 @@ def parse_results_file(file_path):
 
             info = line.split(";")
             fen = info[0].strip()
-            all_results[fen] = {}
+            stored_results[fen] = {}
 
             for i in range(1, len(info)):
-                result = info[i].split(" ")
-                all_results[fen][int(result[0][1:])] = int(result[1])
+                result_set = list(filter(None, info[i].split(" ")))
+                depth = int(result_set[0].strip()[1:])
+                result = int(result_set[1])
+                stored_results[fen][depth] = result
 
-    return all_results
+                max_depth = max(depth, max_depth)
+
+    return stored_results, max_depth
+
+
+def run_tests(e_wrapper, stored_results, depth):
+    """Runs the stored perft tests and prints the results."""
+    n_tests = len(stored_results)
+
+    print(f"{"":12}{"FEN":72}", end="", flush=True)
+    for i in range(1, depth + 1):
+        print(f"{i:8}", end="", flush=True)
+    print(f"{"Time Elapsed":>19}")
+
+    start = time.time()
+    n = 1
+
+    for fen, results in stored_results.items():
+        print(f"{f"({n}/{n_tests})":12}{fen:72}", end="", flush=True)
+        e_wrapper.set_position(fen)
+
+        for i in range(1, depth + 1):
+            if i not in results:
+                print(f"{'-':>8}", end="", flush=True)
+                continue
+
+            e_wrapper.perft(i)
+            res = str(e_wrapper.perft_total - results[i])
+            print(f"{res:>8}", end="", flush=True)
+
+        elapsed = datetime.timedelta(seconds=time.time() - start)
+        print(f"{str(elapsed):>19}")
+
+        n += 1
+
+    end = time.time()
+    print(f"\nTime elapsed: {datetime.timedelta(seconds=end - start)}")
 
 
 def main():
@@ -42,69 +79,23 @@ def main():
         print("Error: Engine executable not found.")
         sys.exit(1)
 
+    e_wrapper = ewr.EngineWrapper(sys.argv[1])
+
     try:
-        all_tests = parse_results_file(sys.argv[2])
-        n_tests = len(all_tests)
+        stored_results, depth = parse_results_file(sys.argv[2])
     except ValueError:
         print("Error: Parse of results file failed.")
         sys.exit(1)
 
     try:
-        depth = int(sys.argv[3])
-        if depth < 0:
-            depth = 6
-    except ValueError:
-        depth = 6
+        depth_arg = int(sys.argv[3])
+        if depth_arg > 0:
+            depth = depth_arg
+    except (IndexError, ValueError):
+        pass
 
-    proc = pexpect.spawn(sys.argv[1])
-    proc.setecho(False)
-    proc.sendline("uci")
-
-    proc.expect(cs.NAME_REGEX)
-    name_list = proc.after.decode("UTF-8").split("\r\n")[0].split(" ")
-    name = " ".join(name_list[2:])
-
-    if "stockfish" in name.lower():
-        reg = cs.STOCKFISH_REGEX
-    else:
-        reg = cs.PERFT_REGEX
-
-    print(f"{"":12}{"FEN":72}", end="", flush=True)
-    for i in range(1, depth + 1):
-        print(f"{i:8}", end="", flush=True)
-    print(f"{"Time Elapsed":>19}")
-
-    start = time.time()
-    n = 1
-
-    for fen, results in all_tests.items():
-        print(f"{f"({n}/{n_tests})":12}{fen:72}", end="", flush=True)
-
-        proc.sendline(f"position fen {fen}")
-        proc.expect("")
-
-        for i in range(1, depth + 1):
-            if i not in results:
-                print(f"{'-':>8}", end="", flush=True)
-                continue
-
-            proc.sendline(f"go perft {i}")
-            proc.expect(reg, timeout=None)
-
-            lines = list(filter(None, proc.after.decode("UTF-8").split("\r\n")))
-            perft_result = int("".join(filter(str.isdigit, lines[-1])))
-            res = str(perft_result - results[i])
-
-            print(f"{res:>8}", end="", flush=True)
-
-        elapsed = datetime.timedelta(seconds=time.time() - start)
-        print(f"{str(elapsed):>19}")
-
-        n += 1
-
-    end = time.time()
-    print(f"\nTime elapsed: {datetime.timedelta(seconds=end - start)}")
-    proc.close()
+    run_tests(e_wrapper, stored_results, depth)
+    e_wrapper.close()
 
 
 if __name__ == "__main__":

@@ -8,198 +8,148 @@ import engine_wrapper as ewr
 import constants as cs
 
 
-class EngineMoveTester(ewr.EngineWrapper):
-    def __init__(self, engine_exec):
-        super().__init__(engine_exec)
-        self.board = ["-" for _ in range(64)]
-        self.fen = ""
-        self.parse_fen(cs.START_POS)
-        self.side = cs.WHITE
-        self.best_moves = []
-        self.id = ""
+def get_tokens(line):
+    """Tokenises a test line string."""
+    sections = re.split("(;)", line)
+    tokens = []
 
-    @staticmethod
-    def flip(i):
-        """Vertically flips a board coordinate."""
-        return i ^ 56
+    for s in sections:
+        tokens.extend(s.split(" "))
 
-    def parse_fen(self, fen_str):
-        """Fills a board array of strings by parsing a fen string."""
-        for i in range(64):
-            self.board[i] = "-"
+    return [s.strip() for s in tokens if s and s]
 
-        i = 0
-        b_index = 0
-        char = fen_str[i]
 
-        while char != " ":
-            if char.isdigit():
-                for j in range(int(char)):
-                    self.board[EngineMoveTester.flip(b_index + j)] = "-"
-                b_index += int(char)
-            elif char != "/":
-                self.board[EngineMoveTester.flip(b_index)] = char
-                b_index += 1
+def parse_line(line):
+    """Extracts the fen, best move(s) and test id from a line."""
+    if not re.match(cs.FEN_REGEX, line):
+        return "", [], ""
 
-            i += 1
-            char = fen_str[i]
+    tokens = get_tokens(line)
 
-        i += 1
-        self.side = cs.WHITE if fen_str[i] == "w" else cs.BLACK
-        self.fen = fen_str[: i + 5] + " 0 1"
+    info = iter(tokens)
 
-        return i + 9  # skip to best move string
+    fen = " ".join(tokens[:4])
 
-    def parse_line(self, line):
-        """Updates the board position and retrieves best moves from a line."""
-        if not re.match(cs.FEN_REGEX_SHORT, line):
-            return
+    hm_clk = 0
+    fm_num = 1
 
-        i = self.parse_fen(line)
-        self.best_moves = []
-        char = ""
+    best_moves = []
+    test_id_sections = []
+
+    for _ in range(4):
+        next(info)
+
+    try:
+        tok = next(info)
+
+        if tok.isdigit():
+            hm_clk = int(tok)
+            tok = next(info)
+
+            if tok.isdigit():
+                fm_num = int(tok)
+                tok = next(info)
 
         while True:
-            char = line[i]
-
-            if char == ";":
+            if tok == "bm":
+                tok = next(info)
                 break
+            tok = next(info)
 
-            if char == " ":
-                i += 1
-                continue
+        while True:
+            if re.match(cs.MOVE_REGEX_LAN, tok) or re.match(cs.MOVE_REGEX_SAN, tok):
+                best_moves.append(tok)
+            elif tok in ("id", ";"):
+                break
+            tok = next(info)
 
-            san_match = re.match(cs.MOVE_REGEX_SAN, line[i:])
-            if san_match:
-                self.best_moves.append(self.san_to_lan(san_match.group()))
-                i += san_match.span()[1]
-            else:
-                self.best_moves.append(line[i : i + 4])
-                i += 4
+        while tok != "id":
+            tok = next(info)
+        tok = next(info)
 
-        i += 5
-        id_match = re.match(r'"(.*?)"', line[i:])
-        self.id = id_match.group()[1:-1]
+        while tok != ";":
+            test_id_sections.append(tok)
+            tok = next(info)
 
-    def get_possible_squares(self, p_type, dest, squares):
-        """Populates an array with all possible start squares of a move."""
-        if self.side == cs.BLACK:
-            p_type = p_type.lower()
+    except StopIteration:
+        pass
 
-        if p_type.lower() not in ("b", "r", "q"):
-            for v in cs.VECS[p_type]:
-                try:
-                    sq = cs.SQUARES[dest + v]
-                    if self.board[dest + v] == p_type:
-                        squares.append(sq)
-                except IndexError:
-                    continue
-            return
+    if not best_moves:
+        return "", [], ""
 
-        for v in cs.VECS[p_type]:
-            i = dest + v
-            while 0 <= i <= 63:
-                sq = cs.SQUARES[i]
+    try:
+        hm_clk = int(tokens[tokens.index("hmvc") + 1])
+        fm_num = int(tokens[tokens.index("fmvn") + 1])
+    except (ValueError, IndexError):
+        pass
 
-                if self.board[i] == p_type:
-                    squares.append(sq)
-                elif self.board[i] != "-":
-                    break
+    fen += f" {hm_clk} {fm_num}"
 
-                i += v
+    test_id = " ".join(test_id_sections)
 
-    def san_to_lan(self, mstr):
-        """Returns a move string in LAN."""
-        if re.match(cs.CASTLE_REGEX, mstr):
-            c_type = cs.KINGSIDE if len(mstr) == 3 else cs.QUEENSIDE
-            start_str = "e" + cs.FIRST_RANK[self.side]
-            dest_str = cs.CASTLE_FILES[c_type] + cs.FIRST_RANK[self.side]
-            return start_str + dest_str
+    return fen, best_moves, test_id
 
-        if mstr[-1] in ("+", "#"):
-            mstr = mstr[:-1]
 
-        if mstr[-2] == "=":
-            mstr = mstr[:-2]
+def test_line(e_wrapper, line, time):
+    """Runs a test from a line in a test file and prints the result."""
+    fen, stored_moves, test_id = parse_line(line)
 
-        dest_str = mstr[-2:]
-        dest = cs.SQUARES.index(dest_str)
-        pawn_step = cs.PAWN_STEP[self.side]
+    if not stored_moves:
+        return -1
 
-        if len(mstr) == 2:
-            if self.board[dest - pawn_step] != "-":
-                return cs.SQUARES[dest - pawn_step] + dest_str
+    e_wrapper.set_position(fen)
+    best_moves = []
 
-            return cs.SQUARES[dest - (2 * pawn_step)] + dest_str
-
-        if mstr[0] in cs.FILES and mstr[1] == "x":
-            return mstr[0] + cs.SQUARES[dest - pawn_step][1] + dest_str
-
-        p_type = mstr[0]
-        start_squares = []
-        self.get_possible_squares(p_type, dest, start_squares)
-
-        if len(start_squares) == 1:
-            return start_squares[0] + dest_str
-
-        if mstr[1:3] in cs.SQUARES:
-            return mstr[1:3] + dest_str
-
-        if mstr[1] in cs.FILES:
-            start_str = [x for x in start_squares if x[0] == mstr[1]][0]
-        elif mstr[1] in cs.RANKS:
-            start_str = [x for x in start_squares if x[1] == mstr[1]][0]
+    for mstr in stored_moves:
+        if re.match(cs.MOVE_REGEX_LAN, mstr) is None:
+            best_moves.append(e_wrapper.san_to_lan(mstr))
         else:
-            raise ValueError
+            best_moves.append(mstr)
 
-        return start_str + dest_str
+    best_move = e_wrapper.get_best_move(time=time)
 
-    def test_line(self, line, time):
-        """Runs a test from a line in a test file and prints the result."""
-        self.parse_line(line)
-        self.set_position(self.fen)
-        self.proc.sendline(f"go movetime {time}")
-        self.proc.expect(cs.BESTMOVE_REGEX, timeout=1000)
+    if best_move in best_moves:
+        res_str = "PASS"
+        result = 1
+    else:
+        res_str = "FAIL"
+        result = 0
 
-        lines = list(filter(None, str(self.proc.after.decode("UTF-8")).split("\r\n")))
-        best_move_str = lines[-1][-4:]
+    test_id = test_id[:35].replace('"', "")
 
-        if best_move_str in self.best_moves:
-            res_str = "PASS"
-            result = 1
-        else:
-            res_str = "FAIL"
-            result = 0
-
-        print(
-            cs.BESTMOVE_FSTRING.format(
-                self.id, self.fen, self.best_moves[0], best_move_str, res_str
-            )
+    print(
+        cs.BESTMOVE_FSTRING.format(
+            test_id, e_wrapper.fen, " ".join(best_moves), best_move, res_str
         )
+    )
 
-        return result
+    return result
 
-    def test_file(self, file_path, time=10000):
-        """Runs tests from an EPD file and prints a table of results."""
-        print(
-            cs.BESTMOVE_FSTRING.format(
-                "ID", "FEN", "Best Move", "Engine's Best Move", "Result"
-            )
+
+def test_file(e_wrapper, file_path, time=10000):
+    """Runs tests from an EPD file and prints a table of results."""
+    print(
+        cs.BESTMOVE_FSTRING.format(
+            "ID", "FEN", "Best Move", "Engine's Best Move", "Result"
         )
+    )
 
-        total = 0
-        passed = 0
+    total = 0
+    passed = 0
 
-        with open(file_path, "r", encoding="UTF-8") as f:
-            lines = f.readlines()
-            for line in lines:
-                passed += self.test_line(line, time)
+    with open(file_path, "r", encoding="UTF-8") as f:
+        lines = f.readlines()
+        for line in lines:
+            inc = test_line(e_wrapper, line, time)
+            if inc != -1:
+                passed += inc
                 total += 1
 
-        print(f"\nTotal: {total}, Passed: {passed}, Failed: {total - passed}")
+    print(f"\nTotal: {total}, Passed: {passed}, Failed: {total - passed}")
 
 
 def main():
+    """Starts the engine and runs the engine tests."""
     if len(sys.argv) < 3:
         print("Error: Missing arguments")
         sys.exit(1)
@@ -208,15 +158,18 @@ def main():
         print("Error: Engine executable not found.")
         sys.exit(1)
 
-    e_tester = EngineMoveTester(sys.argv[1])
+    e_wrapper = ewr.EngineWrapper(sys.argv[1])
 
     if not os.path.isfile(sys.argv[2]):
         print("Error: EPD file not found")
+        return
 
     if len(sys.argv) >= 4 and sys.argv[3].isdigit():
-        e_tester.test_file(sys.argv[2], time=int(sys.argv[3]))
+        test_file(e_wrapper, sys.argv[2], time=int(sys.argv[3]))
     else:
-        e_tester.test_file(sys.argv[2])
+        test_file(e_wrapper, sys.argv[2])
+
+    e_wrapper.close()
 
 
 if __name__ == "__main__":

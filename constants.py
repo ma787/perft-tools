@@ -1,35 +1,32 @@
 # fmt: off
 
-MOVE_REGEX_LAN = r"\A[a-h][1-8][a-h][1-8]([a-z]?)"
+MOVE_REGEX_LAN = r'[a-h][1-8][a-h][1-8]([nbrq]?)'
 
-MOVE_REGEX_SAN = r"([RNBQKR])?([a-h])?([1-8])?(x)?[a-h][1-8](=[RNBQKR])?(\+|#)?"
+MOVE_REGEX_SAN = r'([RNBQKR])?([a-h])?([1-8])?(x)?[a-h][1-8]((=)?[RNBQKR])?(\+|#)?'
 
-CASTLE_REGEX = r"(O|0)-(O|0)(-(O|0))?"
+CASTLE_REGEX = r'(O|0)-(O|0)(-(O|0))?'
 
 FEN_REGEX = (
-    r"([pnbrqkPNBRQK1-8]+\/){7}[pnbrqkPNBRQK1-8]+\s[bw]\s(([K]?[Q]?[k]?[q]?)|-)"
-    r"\s(-|[a-h][36])\s([0-9]+)\s([0-9]+)"
-)
-
-FEN_REGEX_SHORT = (
-    r"([pnbrqkPNBRQK1-8]+\/){7}[pnbrqkPNBRQK1-8]+\s[bw]\s(-)\s(-)\s"
+    r'([pnbrqkPNBRQK1-8]+\/){7}[pnbrqkPNBRQK1-8]+\s[bw]\s(([K]?[Q]?[k]?[q]?)|-)'
+    r'\s(-|[a-h][36])'
 )
 
 STOCKFISH_REGEX = (
-    r"(info string(.)*\r\n)+([a-h][1-8][a-h][1-8]([a-z]?): [0-9]+\r\n)+"
-    r"\r\nNodes searched: [0-9]+"
+    r'(info string(.)*\r\n)+([a-h][1-8][a-h][1-8]([a-z]?): [0-9]+\r\n)+'
+    r'\r\nNodes searched: [0-9]+'
 )
-PERFT_REGEX = r"([a-h][1-8][a-h][1-8]([a-z]?) [0-9]+\r\n)+\r\n[0-9]+"
+
+PERFT_REGEX = r'([a-h][1-8][a-h][1-8]([a-z]?) [0-9]+\r\n)+\r\n[0-9]+'
 
 BESTMOVE_REGEX = (
-    r"((info(.)*)\r\n)+(bestmove [a-h][1-8][a-h][1-8]([a-z]?))"
+    r'((info(.)*)\r\n)+(bestmove [a-h][1-8][a-h][1-8]([a-z]?))'
 )
 
-NAME_REGEX = r"id name (.)*\r\n"
+NAME_REGEX = r'id name (.)*\r\n'
 
 DIFF_FSTRING = "{:8}{:>16}{:>16}{:>16}"
 
-BESTMOVE_FSTRING = "{:<30}{:<72}{:<13}{:<22}{:<6}"
+BESTMOVE_FSTRING = "{:<36}{:<72}{:<22}{:<22}{:<6}"
 
 START_POS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -58,6 +55,7 @@ N, E, S, W = 8, 1, -8, -1
 PAWN_STEP = (N, S)
 CASTLE_FILES = ("g", "c")
 FIRST_RANK = ("1", "8")
+FINAL_RANK = ("8", "1")
 
 KNIGHT_VECS = (
     N + N + E, N + N + W, S + S + E, S + S + W,
