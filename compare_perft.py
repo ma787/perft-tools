@@ -16,7 +16,8 @@ class ComparePerft:
         self.engine = ewr.EngineWrapper(engine_exec)
         self.stockfish = ewr.EngineWrapper("stockfish")
         self.fen = cs.START_POS
-        self.move_history = []
+        self.ply = 0
+        self.moves_made = []
         self.legal_moves = []
 
     def update_position(self, fen, moves=None):
@@ -24,20 +25,18 @@ class ComparePerft:
         if fen == "startpos":
             fen = cs.START_POS
 
-        self.stockfish.set_position(fen, moves)
-        self.engine.set_position(fen, moves)
+        if moves:
+            self.moves_made = moves
+
         self.fen = fen
-        self.move_history = []
         self.legal_moves = []
 
     def step_back(self):
         """Steps back up the game tree."""
-        if len(self.move_history) == 0:
+        if not self.ply:
             return
 
-        self.move_history.pop()
-        self.stockfish.set_position(self.fen, self.move_history)
-        self.engine.set_position(self.fen, self.move_history)
+        self.moves_made.pop()
 
     def step_forward(self, move):
         """Steps forward in the game tree."""
@@ -49,9 +48,8 @@ class ComparePerft:
             print("Not a legal move")
             return
 
-        self.move_history.append(move)
-        self.stockfish.set_position(self.fen, self.move_history)
-        self.engine.set_position(self.fen, self.move_history)
+        self.moves_made.append(move)
+        self.ply += 1
 
     def compare_perft(self, depth):
         """Prints the difference between the engines' perft results at a given depth."""
@@ -61,37 +59,28 @@ class ComparePerft:
             )
         )
 
-        self.stockfish.perft(depth)
-        self.engine.perft(depth)
+        sf_results, sf_total = self.stockfish.perft(depth, self.fen, self.moves_made)
+        e_results, e_total = self.engine.perft(depth, self.fen, self.moves_made)
 
-        self.legal_moves = list(self.stockfish.perft_results.keys())
+        self.legal_moves = list(sf_results.keys())
 
-        for mstr, e1_res in self.engine.perft_results.items():
-            if mstr in self.stockfish.perft_results:
-                e2_res = self.stockfish.perft_results.pop(mstr)
+        for mstr, e1_res in e_results.items():
+            if mstr in sf_results:
+                e2_res = sf_results.pop(mstr)
                 print(cs.DIFF_FSTRING.format(mstr, e1_res, e2_res, e2_res - e1_res))
             else:
                 print(cs.DIFF_FSTRING.format(mstr, e1_res, "-", -e1_res))
 
-        for mstr, e2_res in self.stockfish.perft_results.items():
+        for mstr, e2_res in sf_results.items():
             print(cs.DIFF_FSTRING.format(mstr, "-", e2_res, e2_res))
 
-        print(
-            cs.DIFF_FSTRING.format(
-                "Total",
-                self.engine.perft_total,
-                self.stockfish.perft_total,
-                self.stockfish.perft_total - self.engine.perft_total,
-            )
-        )
+        print(cs.DIFF_FSTRING.format("Total", e_total, sf_total, sf_total - e_total))
 
     def parse_command(self, cmd):
         """Parses a user input."""
         args = cmd.split(" ")
 
         if cmd == "quit":
-            self.engine.close()
-            self.stockfish.close()
             sys.exit()
 
         if cmd in ("b", "back"):

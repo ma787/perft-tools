@@ -1,28 +1,15 @@
+"""Module storing project constants."""
+
 # fmt: off
 
 MOVE_REGEX_LAN = r'[a-h][1-8][a-h][1-8]([nbrq]?)'
-
 MOVE_REGEX_SAN = r'([RNBQKR])?([a-h])?([1-8])?(x)?[a-h][1-8]((=)?[RNBQKR])?(\+|#)?'
-
-CASTLE_REGEX = r'(O|0)-(O|0)(-(O|0))?'
+CASTLE_MOVE_REGEX = r'(O|0)-(O|0)(-(O|0))?'
 
 FEN_REGEX = (
     r'([pnbrqkPNBRQK1-8]+\/){7}[pnbrqkPNBRQK1-8]+\s[bw]\s(([K]?[Q]?[k]?[q]?)|-)'
     r'\s(-|[a-h][36])'
 )
-
-STOCKFISH_REGEX = (
-    r'(info string(.)*\r\n)+([a-h][1-8][a-h][1-8]([a-z]?): [0-9]+\r\n)+'
-    r'\r\nNodes searched: [0-9]+'
-)
-
-PERFT_REGEX = r'([a-h][1-8][a-h][1-8]([a-z]?) [0-9]+\r\n)+\r\n[0-9]+'
-
-BESTMOVE_REGEX = (
-    r'((info(.)*)\r\n)+(bestmove [a-h][1-8][a-h][1-8]([a-z]?))'
-)
-
-NAME_REGEX = r'id name (.)*\r\n'
 
 DIFF_FSTRING = "{:8}{:>16}{:>16}{:>16}"
 

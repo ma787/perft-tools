@@ -15,11 +15,9 @@ the best move it returns is compared to those stored in the file.
 ## Requirements
 **Stockfish** must be installed and accessible from your PATH (for the **compare_perft** script).
 
-The Python module **pexpect** must also be installed.
-
 Your engine must recognise the following UCI commands:
 - `go perft`
-- `go movetime`
+- `go movetime` (for the **test_engine** script)
 - `position`
 - `uci`
 

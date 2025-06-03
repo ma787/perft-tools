@@ -49,15 +49,16 @@ def run_tests(e_wrapper, stored_results, depth):
 
     for fen, results in stored_results.items():
         print(f"{f"({n}/{n_tests})":12}{fen:72}", end="", flush=True)
-        e_wrapper.set_position(fen)
+
+        depths = list(filter(lambda x: x <= depth, results.keys()))
+        totals = e_wrapper.get_perft_totals(depths, fen)
 
         for i in range(1, depth + 1):
             if i not in results:
                 print(f"{'-':>8}", end="", flush=True)
                 continue
 
-            e_wrapper.perft(i)
-            res = str(e_wrapper.perft_total - results[i])
+            res = str(totals[i] - results[i])
             print(f"{res:>8}", end="", flush=True)
 
         elapsed = datetime.timedelta(seconds=time.time() - start)
@@ -95,7 +96,6 @@ def main():
         pass
 
     run_tests(e_wrapper, stored_results, depth)
-    e_wrapper.close()
 
 
 if __name__ == "__main__":

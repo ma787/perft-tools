@@ -1,11 +1,14 @@
+"""Script used to test an engine's search against results stored a file."""
+
 import os
 import re
 import sys
 import shutil
 
 
-import engine_wrapper as ewr
+import board as bd
 import constants as cs
+import engine_wrapper as ewr
 
 
 def get_tokens(line):
@@ -90,23 +93,23 @@ def parse_line(line):
     return fen, best_moves, test_id
 
 
-def test_line(e_wrapper, line, time):
+def test_line(e_wrapper, board, line, time):
     """Runs a test from a line in a test file and prints the result."""
     fen, stored_moves, test_id = parse_line(line)
 
     if not stored_moves:
         return -1
 
-    e_wrapper.set_position(fen)
+    board.update_board(fen)
     best_moves = []
 
     for mstr in stored_moves:
         if re.match(cs.MOVE_REGEX_LAN, mstr) is None:
-            best_moves.append(e_wrapper.san_to_lan(mstr))
+            best_moves.append(board.san_to_lan(mstr))
         else:
             best_moves.append(mstr)
 
-    best_move = e_wrapper.get_best_move(time=time)
+    best_move = e_wrapper.get_best_move(fen=fen, t=time)
 
     if best_move in best_moves:
         res_str = "PASS"
@@ -119,7 +122,7 @@ def test_line(e_wrapper, line, time):
 
     print(
         cs.BESTMOVE_FSTRING.format(
-            test_id, e_wrapper.fen, " ".join(best_moves), best_move, res_str
+            test_id, fen, " ".join(best_moves), best_move, res_str
         )
     )
 
@@ -137,10 +140,12 @@ def test_file(e_wrapper, file_path, time=10000):
     total = 0
     passed = 0
 
+    board = bd.Board()
+
     with open(file_path, "r", encoding="UTF-8") as f:
         lines = f.readlines()
         for line in lines:
-            inc = test_line(e_wrapper, line, time)
+            inc = test_line(e_wrapper, board, line, time)
             if inc != -1:
                 passed += inc
                 total += 1
@@ -168,8 +173,6 @@ def main():
         test_file(e_wrapper, sys.argv[2], time=int(sys.argv[3]))
     else:
         test_file(e_wrapper, sys.argv[2])
-
-    e_wrapper.close()
 
 
 if __name__ == "__main__":
